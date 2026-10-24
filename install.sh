@@ -54,17 +54,18 @@ fi
 [ -d "$PREFIX" ] || die "Not a Termux environment."
 case "$(uname -m)" in aarch64|arm64) ;; *) die "arm64/aarch64 only (found $(uname -m)).";; esac
 
-SRC="$(cd "$(dirname "$0")" 2>/dev/null && pwd || true)"
-need=0; for f in launcher.sh fix_resolv.c; do [ -f "$SRC/$f" ] || need=1; done
-if [ "$need" = 1 ]; then
-  command -v curl >/dev/null || die "curl required to fetch sources."
-  SRC="$(mktemp -d)"; say "Fetching source files…"
-  for f in launcher.sh fix_resolv.c; do curl -fsSL "$RAW/$f" -o "$SRC/$f" || die "fetch $f failed"; done
-fi
-
+# Base packages come first: on a fresh Termux curl may not exist yet, and the
+# source fetch below needs it (dying with "curl required" here would be a bug).
 say "Installing base packages (clang curl tar ca-certificates)…"
 pkg update -y >/dev/null 2>&1 || true
 pkg install -y clang curl tar ca-certificates >/dev/null || die "pkg install failed."
+
+SRC="$(cd "$(dirname "$0")" 2>/dev/null && pwd || true)"
+need=0; for f in launcher.sh fix_resolv.c; do [ -f "$SRC/$f" ] || need=1; done
+if [ "$need" = 1 ]; then
+  SRC="$(mktemp -d)"; say "Fetching source files…"
+  for f in launcher.sh fix_resolv.c; do curl -fsSL "$RAW/$f" -o "$SRC/$f" || die "fetch $f failed"; done
+fi
 
 if [ ! -f "$GLD" ] || [ ! -x "$GL/bin/patchelf" ] || [ ! -x "$GL/bin/ld" ]; then
   say "Enabling the Termux glibc repo + runtime…"
@@ -89,6 +90,9 @@ fi
 
 mkdir -p "$DIR"
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
+if [ "$line" = 2 ] && [ -z "$ver" ] && [ -x "$DIR/opencode" ]; then
+  say "Existing install found — moving to the latest 2.x (pass --v1 to stay on 1.x)."
+fi
 if [ "$line" = 2 ]; then
   if [ -z "$ver" ]; then
     ver="$(curl -fsSL https://opencode.ai/update/api/latest/cli/npm 2>/dev/null \
@@ -122,6 +126,18 @@ install -m755 "$oc" "$DIR/opencode"
 install -m755 "$SRC/launcher.sh" "$DIR/launcher.sh"
 ln -sf "$DIR/launcher.sh" "$PREFIX/bin/opencode"
 
+# Neutralize a prior *upstream* install. Its installer prepends ~/.opencode/bin to
+# PATH in ~/.bashrc / ~/.zshrc, and that dir holds a stock-interpreter binary
+# (unrunnable here) that would shadow our launcher. Comment out only the lines
+# that reference that dir; everything else in the rc files is left alone.
+for rc in "$HOME_DIR/.bashrc" "$HOME_DIR/.zshrc"; do
+  [ -f "$rc" ] || continue
+  grep -qE '^[[:space:]]*[^#[:space:]].*\.opencode/bin' "$rc" 2>/dev/null || continue
+  cp -p "$rc" "$rc.bak-opencode"
+  sed -i -E 's|^([[:space:]]*)([^#].*\.opencode/bin.*)$|\1# [opencode-termux-native] disabled: \2|' "$rc"
+  say "Disabled stale ~/.opencode/bin PATH entry in $rc (backup: $rc.bak-opencode)"
+done
+
 # Disable OpenCode's upstream self-updater. On Termux its `upgrade` (curl method)
 # runs the upstream install script, which drops a stock-interpreter binary in
 # ~/.opencode/bin (unrunnable here) and prepends it to PATH in ~/.bashrc, quietly
@@ -143,7 +159,8 @@ elif ! grep -qs '"autoupdate"' "$CFGJSONC" "$CFGJSON" 2>/dev/null; then
 fi
 
 say "Verifying…"
-if opencode --version >/dev/null 2>&1; then say "Installed OpenCode $(opencode --version 2>/dev/null | head -1) — native, no proot."; else say "Installed; run 'opencode'."; fi
+OC="$PREFIX/bin/opencode"
+if "$OC" --version >/dev/null 2>&1; then say "Installed OpenCode $("$OC" --version 2>/dev/null | head -1) — native, no proot."; else say "Installed; run 'opencode'."; fi
 echo
 say "Auth:   opencode providers   (add API keys; free models + HuggingFace built in)"
 say "Run:    opencode             (TUI)   |   opencode run \"...\"   (one-shot)"

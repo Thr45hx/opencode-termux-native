@@ -37,7 +37,7 @@ or one-shot:
 curl -fsSL https://raw.githubusercontent.com/Thr45hx/opencode-termux-native/main/install.sh | bash
 ```
 
-Fresh installs get the latest **2.x** build (npm). To stay on the 1.x line or pin a release:
+Fresh installs get the latest **2.x** build (npm) — that's the primary line. **1.x is still actively maintained upstream**, so it stays supported here as an explicit opt-in:
 
 ```bash
 bash install.sh --v1          # latest 1.x (GitHub releases)
@@ -61,7 +61,7 @@ opencode update 2.1.3      # pin a specific release
 opencode update 1.19.4     # pin a 1.x release
 ```
 
-`update` follows the line you are on: a 1.x install updates within 1.x, and a 2.x install updates within 2.x. Use `--major` for the explicit 1.x → 2.x jump. If the binary is missing (fresh/recovery), `update` installs the latest 2.x.
+`update` follows the line you are on: a 1.x install updates within 1.x, and a 2.x install updates within 2.x. Use `--major` for the explicit 1.x → 2.x jump — on a plain `update` while sitting on 1.x, the launcher prints the current 2.x version as a hint but does **not** move you. If the binary is missing (fresh/recovery), `update` installs the latest 2.x.
 
 **Do not use OpenCode's own `upgrade` without this launcher.** Upstream's self-updater (the `curl` method) runs the OpenCode **install script**, which on Termux drops a fresh binary in `~/.opencode/bin` carrying the stock `/lib/ld-linux-aarch64.so.1` interpreter — **unrunnable here** — and prepends that dir to `PATH` in `~/.bashrc`, so your next shell silently picks the broken copy.
 
@@ -72,7 +72,7 @@ This launcher **intercepts `update`/`upgrade`** and updates the native way inste
 | 1.x | GitHub release tarball (`opencode-linux-arm64.tar.gz`) | `opencode` |
 | 2.x | npm package `@opencode/cli-linux-arm64` | `package/bin/opencode` |
 
-The binary is installed straight into `~/agents/opencode/opencode`, its interpreter is re-patchelf'd, and it is verified with `--version` before the command returns — no `~/.opencode`, no `~/.bashrc` edits. `install.sh` also sets `"autoupdate": false` in `~/.config/opencode/opencode.jsonc` so the TUI/background updater can't re-trigger the upstream path. The TUI's manual `/update` still belongs to upstream — use `opencode update` from the CLI instead.
+The binary is installed straight into `~/agents/opencode/opencode`, its interpreter is re-patchelf'd, and it is verified with `--version` before the command returns — no `~/.opencode`, no `~/.bashrc` edits. If an *earlier upstream* install already left `~/.opencode/bin` on your `PATH` (in `~/.bashrc`/`~/.zshrc`), the installer comments out just those lines so the broken stock binary can't shadow the launcher — a `.bak-opencode` copy is kept. `install.sh` also sets `"autoupdate": false` in `~/.config/opencode/opencode.jsonc` so the TUI/background updater can't re-trigger the upstream path. The TUI's manual `/update` still belongs to upstream — use `opencode update` from the CLI instead.
 
 ## Layout
 ```

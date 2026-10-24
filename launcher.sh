@@ -116,6 +116,12 @@ case "${1:-}" in
       line=1; [ "$maj" -ge 2 ] && line=2
     fi
 
+    # v2-first, but 1.x is still a live maintenance line: stay on it silently,
+    # just tell the user what the 2.x jump would look like.
+    if [ "$line" = 1 ] && [ "$major" = false ] && [ -z "$target" ]; then
+      v2="$(latest_v2)"; [ -n "$v2" ] && say "note: staying on the 1.x line — latest 2.x is $v2 ('opencode update --major' to switch)"
+    fi
+
     TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
     if [ "$line" = 2 ]; then
       say "updating (2.x · npm · native) — current: ${cur:-none}, target: ${target:-latest}"
